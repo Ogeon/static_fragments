@@ -1,0 +1,11 @@
+[package]
+name = "static_fragments"
+version = "0.0.1"
+authors = ["Erik Hedvall <hello@erikhedvall.nu>"]
+
+[lib]
+name = "static_fragments"
+plugin = true
+
+[dependencies.fragments]
+git = "https://github.com/ogeon/fragments"
