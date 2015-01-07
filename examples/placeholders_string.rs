@@ -1,6 +1,7 @@
-#![feature(phase)]
+#![feature(plugin)]
 
-#[phase(plugin)]
+#[plugin]
+#[no_link]
 extern crate static_fragments;
 extern crate fragments;
 
