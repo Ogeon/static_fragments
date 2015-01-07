@@ -68,6 +68,25 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
         Vec::new()
     ));
     let ty_option_content = cx.ty_option(ty_content.clone());
+    let ty_generator = cx.ty_sum(
+        cx.path_all(
+            sp,
+            true,
+            vec![cx.ident_of("fragments"), cx.ident_of("Generator")],
+            Vec::new(),
+            Vec::new(),
+            Vec::new()
+        ),
+        OwnedSlice::from_vec(vec![ast::RegionTyParamBound(lifetime_content.lifetime)])
+    );
+    let ty_option_box_generator = cx.ty_option(cx.ty_path(cx.path_all(
+        sp,
+        true,
+        vec![cx.ident_of("std"), cx.ident_of("boxed"), cx.ident_of("Box")],
+        Vec::new(),
+        vec![ty_generator],
+        Vec::new()
+    )));
     let ty_bool = cx.ty_path(cx.path(sp, vec![cx.ident_of("bool")]));
     let expr_none = cx.expr_none(sp);
     let expr_false = cx.expr_bool(sp, false);
@@ -89,6 +108,13 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
         template_fields.push(field_def);
         template_constructor.push(field_assign);
         template_methods.push(construct_condition_setter(cx, sp, idents.set_function, idents.field));
+    }
+
+    for (_label, idents) in generators.into_iter() {
+        let (field_def, field_assign) = construct_field(sp, idents.field, ty_option_box_generator.clone(), expr_none.clone());
+        template_fields.push(field_def);
+        template_constructor.push(field_assign);
+        template_methods.push(construct_generator_setter(cx, sp, idents.set_function, idents.field, lifetime_content.clone()));
     }
 
     let template_generics = ast::Generics {
@@ -195,12 +221,21 @@ fn parse_tokens<'a>(
             &Token::Generated(ref label, ref args) => {
                 let field = cx.ident_of(format!("generator_{}", label).as_slice());
 
+                generators.insert(label.as_slice(), IdentGroup {
+                    field: field,
+                    set_function: cx.ident_of(format!("insert_generator_{}", label).as_slice()),
+                    unset_function: Some(cx.ident_of(format!("unset_generator_{}", label).as_slice()))
+                });
+
                 let args = cx.expr_vec(sp, args.iter().map(|arg| {
                     let arg = arg.as_slice();
-                    quote_expr!(cx, $arg)
+                    quote_expr!(cx, $arg.to_owned())
                 }).collect());
 
-                quote_stmt!(cx, try!(self.$field($args, f)))
+                quote_stmt!(cx, if let Some(ref generator) = self.$field {
+                    use ::std::borrow::ToOwned;
+                    try!(generator.generate($args.as_slice(), f));
+                })
             }
         }
     }).collect()
@@ -312,6 +347,44 @@ fn construct_condition_setter(
     let generics = ast::Generics {
         lifetimes: Vec::new(),
         ty_params: OwnedSlice::empty(),
+        where_clause: ast::WhereClause {
+            id: ast::DUMMY_NODE_ID,
+            predicates: Vec::new()
+        }
+    };
+
+    construct_method(cx, sp, generics, ident, SelfType::RefMut(None), args, block, None)
+}
+
+fn construct_generator_setter(
+    cx: &mut ExtCtxt,
+    sp: codemap::Span,
+    ident: ast::Ident,
+    ident_field: ast::Ident,
+    lifetime_content: ast::LifetimeDef
+) -> ast::ImplItem {
+    let ident_generator_var = cx.ident_of("generator");
+    let ident_t = cx.ident_of("T");
+    let path_generator_trait = cx.path_all(
+        sp,
+        true,
+        vec![cx.ident_of("fragments"), cx.ident_of("Generator")],
+        Vec::new(),
+        Vec::new(),
+        Vec::new()
+    );
+    let ty_t = cx.ty_path(cx.path(sp, vec![ident_t]));
+    let ty_generator_lifetime = cx.ty_sum(path_generator_trait.clone(), OwnedSlice::from_vec(vec![ast::RegionTyParamBound(lifetime_content.lifetime)]));
+
+    let args = vec![cx.arg(sp, ident_generator_var, ty_t)];
+
+    let block = cx.block(sp, vec![cx.stmt_expr(quote_expr!(cx, self.$ident_field = Some(box $ident_generator_var as Box<$ty_generator_lifetime>)))], None);
+
+    let bound = cx.typarambound(path_generator_trait);
+
+    let generics = ast::Generics {
+        lifetimes: Vec::new(),
+        ty_params: OwnedSlice::from_vec(vec![cx.typaram(sp, ident_t, OwnedSlice::from_vec(vec![bound, ast::RegionTyParamBound(lifetime_content.lifetime)]), None)]),
         where_clause: ast::WhereClause {
             id: ast::DUMMY_NODE_ID,
             predicates: Vec::new()
