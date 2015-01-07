@@ -23,7 +23,7 @@ use fragments::{Template, Token, InnerTemplate};
 struct IdentGroup {
     field: ast::Ident,
     set_function: ast::Ident,
-    unset_function: ast::Ident
+    unset_function: Option<ast::Ident>
 }
 
 #[plugin_registrar]
@@ -88,6 +88,7 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
         let (field_def, field_assign) = construct_field(sp, idents.field, ty_bool.clone(), expr_false.clone());
         template_fields.push(field_def);
         template_constructor.push(field_assign);
+        template_methods.push(construct_condition_setter(cx, sp, idents.set_function, idents.field));
     }
 
     let template_generics = ast::Generics {
@@ -155,7 +156,7 @@ fn parse_tokens<'a>(
                 placeholders.insert(label.as_slice(), IdentGroup {
                     field: field,
                     set_function: cx.ident_of(format!("insert_{}", label).as_slice()),
-                    unset_function: cx.ident_of(format!("unset_{}", label).as_slice())
+                    unset_function: Some(cx.ident_of(format!("unset_{}", label).as_slice()))
                 });
 
                 quote_stmt!(cx, if let Some(ref content) = self.$field {
@@ -164,6 +165,11 @@ fn parse_tokens<'a>(
             },
             &Token::Conditional(ref label, expected, ref tokens) => {
                 let field = cx.ident_of(format!("condition_{}", label).as_slice());
+                conditions.insert(label.as_slice(), IdentGroup {
+                    field: field,
+                    set_function: cx.ident_of(format!("set_{}", label).as_slice()),
+                    unset_function: None
+                });
 
                 let subsequence = parse_tokens(cx, sp, tokens.as_slice(), placeholders, conditions, generators);
 
@@ -177,7 +183,7 @@ fn parse_tokens<'a>(
                 placeholders.insert(label.as_slice(), IdentGroup {
                     field: field,
                     set_function: cx.ident_of(format!("insert_{}", label).as_slice()),
-                    unset_function: cx.ident_of(format!("unset_{}", label).as_slice())
+                    unset_function: Some(cx.ident_of(format!("unset_{}", label).as_slice()))
                 });
 
                 let subsequence = parse_tokens(cx, sp, tokens.as_slice(), placeholders, conditions, generators);
@@ -281,6 +287,31 @@ fn construct_content_setter(
     let generics = ast::Generics {
         lifetimes: Vec::new(),
         ty_params: OwnedSlice::from_vec(vec![cx.typaram(sp, ident_t, OwnedSlice::from_vec(vec![bound]), None)]),
+        where_clause: ast::WhereClause {
+            id: ast::DUMMY_NODE_ID,
+            predicates: Vec::new()
+        }
+    };
+
+    construct_method(cx, sp, generics, ident, SelfType::RefMut(None), args, block, None)
+}
+
+fn construct_condition_setter(
+    cx: &mut ExtCtxt,
+    sp: codemap::Span,
+    ident: ast::Ident,
+    ident_field: ast::Ident
+) -> ast::ImplItem {
+    let ident_state = cx.ident_of("state");
+    let ty_bool = cx.ty_path(cx.path(sp, vec![cx.ident_of("bool")]));
+
+    let args = vec![cx.arg(sp, ident_state, ty_bool)];
+
+    let block = cx.block(sp, vec![cx.stmt_expr(quote_expr!(cx, self.$ident_field = $ident_state))], None);
+
+    let generics = ast::Generics {
+        lifetimes: Vec::new(),
+        ty_params: OwnedSlice::empty(),
         where_clause: ast::WhereClause {
             id: ast::DUMMY_NODE_ID,
             predicates: Vec::new()
