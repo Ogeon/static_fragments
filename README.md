@@ -23,7 +23,7 @@ and it works more or less the same, with a few exceptions. The
 `static_fragments` crate doesn't come with anything more that the compiler
 plugin, so the `fragments` crate is still necessary.
 
-```
+```Rust
 #![feature(plugin)]
 
 #[plugin]
