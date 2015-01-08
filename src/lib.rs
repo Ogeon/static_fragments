@@ -20,6 +20,10 @@ use rustc::plugin::Registry;
 
 use fragments::{Template, Token, InnerTemplate};
 
+use utils::SelfType;
+
+mod utils;
+
 struct IdentGroup {
     field: ast::Ident,
     set_function: ast::Ident,
@@ -97,21 +101,21 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
     let mut template_methods = Vec::new();
 
     for (_label, idents) in placeholders.into_iter() {
-        let (field_def, field_assign) = construct_field(sp, idents.field, ty_option_content.clone(), expr_none.clone());
+        let (field_def, field_assign) = utils::mk_field(sp, idents.field, ty_option_content.clone(), expr_none.clone());
         template_fields.push(field_def);
         template_constructor.push(field_assign);
         template_methods.push(construct_content_setter(cx, sp, idents.set_function, idents.field, lifetime_content.clone()));
     }
 
     for (_label, idents) in conditions.into_iter() {
-        let (field_def, field_assign) = construct_field(sp, idents.field, ty_bool.clone(), expr_false.clone());
+        let (field_def, field_assign) = utils::mk_field(sp, idents.field, ty_bool.clone(), expr_false.clone());
         template_fields.push(field_def);
         template_constructor.push(field_assign);
         template_methods.push(construct_condition_setter(cx, sp, idents.set_function, idents.field));
     }
 
     for (_label, idents) in generators.into_iter() {
-        let (field_def, field_assign) = construct_field(sp, idents.field, ty_option_box_generator.clone(), expr_none.clone());
+        let (field_def, field_assign) = utils::mk_field(sp, idents.field, ty_option_box_generator.clone(), expr_none.clone());
         template_fields.push(field_def);
         template_constructor.push(field_assign);
         template_methods.push(construct_generator_setter(cx, sp, idents.set_function, idents.field, lifetime_content.clone()));
@@ -152,11 +156,11 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
     });
     items.push(function_new);
 
-    let template_impl = construct_impl(cx, sp, template_generics.clone(), None, ty_template.clone(), template_methods);
+    let template_impl = utils::mk_impl(cx, sp, template_generics.clone(), None, ty_template.clone(), template_methods);
     items.push(template_impl);
 
     let template_show_block = cx.block(sp, template_show_stmts, None);
-    items.push(implement_show(cx, template_generics.clone(), ty_template.clone(), template_show_block));
+    items.push(utils::implement_show(cx, template_generics.clone(), ty_template.clone(), template_show_block));
 
     let module = cx.item_mod(sp, sp, module_ident, Vec::new(), Vec::new(), items);
     MacItems::new(vec![module].into_iter())
@@ -241,60 +245,6 @@ fn parse_tokens<'a>(
     }).collect()
 }
 
-fn construct_field(sp: codemap::Span, ident: ast::Ident, ty: P<ast::Ty>, default_expr: P<ast::Expr>) -> (codemap::Spanned<ast::StructField_>, ast::Field) {
-    let field_def = ast::StructField_ {
-        kind: ast::NamedField(ident, ast::Public),
-        id: ast::DUMMY_NODE_ID,
-        ty: ty,
-        attrs: Vec::new()
-    };
-
-    let field_assign = ast::Field {
-        ident: codemap::Spanned {
-            node: ident,
-            span: sp
-        },
-        expr: default_expr,
-        span: sp
-    };
-
-    (
-        codemap::Spanned {
-            node: field_def,
-            span: sp
-        },
-        field_assign
-    )
-}
-
-fn construct_impl(
-    cx: &mut ExtCtxt,
-    sp: codemap::Span,
-    generics: ast::Generics,
-    trait_ref: Option<ast::TraitRef>,
-    ty: P<ast::Ty>,
-    items: Vec<ast::ImplItem>
-) -> P<ast::Item> {
-    cx.item(
-        sp, cx.ident_of(""), Vec::new(),
-        ast::ItemImpl(ast::Unsafety::Normal, ast::ImplPolarity::Positive, generics, trait_ref, ty, items)
-    )
-}
-
-enum SelfType {
-    Ref(Option<ast::Lifetime>),
-    RefMut(Option<ast::Lifetime>)
-}
-
-impl SelfType {
-    fn into_explicit(self, cx: &mut ExtCtxt) -> ast::ExplicitSelf_ {
-        match self {
-            SelfType::Ref(lifetime) => ast::SelfRegion(lifetime, ast::MutImmutable, cx.ident_of("self")),
-            SelfType::RefMut(lifetime) => ast::SelfRegion(lifetime, ast::MutMutable, cx.ident_of("self"))
-        }
-    }
-}
-
 fn construct_content_setter(
     cx: &mut ExtCtxt,
     sp: codemap::Span,
@@ -328,7 +278,7 @@ fn construct_content_setter(
         }
     };
 
-    construct_method(cx, sp, generics, ident, SelfType::RefMut(None), args, block, None)
+    utils::mk_method(cx, sp, generics, ident, SelfType::RefMut(None), args, block, None)
 }
 
 fn construct_condition_setter(
@@ -353,7 +303,7 @@ fn construct_condition_setter(
         }
     };
 
-    construct_method(cx, sp, generics, ident, SelfType::RefMut(None), args, block, None)
+    utils::mk_method(cx, sp, generics, ident, SelfType::RefMut(None), args, block, None)
 }
 
 fn construct_generator_setter(
@@ -391,54 +341,5 @@ fn construct_generator_setter(
         }
     };
 
-    construct_method(cx, sp, generics, ident, SelfType::RefMut(None), args, block, None)
-}
-
-fn implement_show(cx: &mut ExtCtxt, generics: ast::Generics, ty: P<ast::Ty>, block: P<ast::Block>) -> P<ast::Item> {
-    quote_item!(cx, impl$generics ::std::fmt::Show for $ty {
-        fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-            $block
-            Ok(())
-        }
-    }).unwrap()
-}
-
-fn construct_method(
-    cx: &mut ExtCtxt,
-    sp: codemap::Span,
-    generics: ast::Generics,
-    ident: ast::Ident,
-    self_type: SelfType,
-    args: Vec<ast::Arg>,
-    block: P<ast::Block>,
-    return_type: Option<P<ast::Ty>>
-) -> ast::ImplItem {
-    let self_type = codemap::Spanned {
-        node: self_type.into_explicit(cx),
-        span: sp
-    };
-
-    let output = match return_type {
-        Some(ty) => ty,
-        None => cx.ty(sp, ast::TyTup(Vec::new()))
-    };
-
-    let decl = P(ast::FnDecl {
-        inputs: vec![cx.arg(sp, cx.ident_of("self"), cx.ty_infer(sp))].into_iter().chain(args.into_iter()).collect(),
-        output: ast::Return(output),
-        variadic: false
-    });
-
-    let method = ast::Method {
-        attrs: ignore_dead_code(cx, sp),
-        id: ast::DUMMY_NODE_ID,
-        span: sp,
-        node: ast::MethDecl(ident, generics, syntax::abi::Rust, self_type, ast::Unsafety::Normal, decl, block, ast::Public)
-    };
-
-    ast::MethodImplItem(P(method))
-}
-
-fn ignore_dead_code(cx: &mut ExtCtxt, sp: codemap::Span) -> Vec<ast::Attribute> {
-    vec![cx.attribute(sp, cx.meta_list(sp, token::InternedString::new("allow"), vec![cx.meta_word(sp, token::InternedString::new("dead_code"))]))]
+    utils::mk_method(cx, sp, generics, ident, SelfType::RefMut(None), args, block, None)
 }
