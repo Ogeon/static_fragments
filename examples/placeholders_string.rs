@@ -8,6 +8,7 @@ extern crate fragments;
 template! greeting {"Hello, [[:name]]!"}
 
 fn main() {
+    //Create a new Template
     let mut template = greeting::new();
 
     //Insert something into the `name` placeholder

@@ -5,10 +5,10 @@
 extern crate static_fragments;
 extern crate fragments;
 
-template! greeting {"Hello, [[:name]]![[?show_hidden]] The condition is true.[[/show_hidden]]"}
+template! greeting {"Hello, [[:name]]![[?show_hidden]] The condition is true.[[/]]"}
 
 fn main() {
-    //Create a new Template from a string
+    //Create a new Template
     let mut template = greeting::new();
 
     //Insert something into the `name` placeholder

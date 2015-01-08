@@ -10,7 +10,7 @@ use std::fmt;
 template! greeting {"Hello, [[:name]]! Is it written as 'white space' or '[[+join white space]]'?"}
 
 fn main() {
-	//Create a new Template from a string
+	//Create a new Template
 	let mut template = greeting::new();
 
 	//Insert something into the `name` placeholder
