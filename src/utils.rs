@@ -106,3 +106,16 @@ pub fn mk_method(
 fn ignore_dead_code(cx: &mut ExtCtxt, sp: codemap::Span) -> Vec<ast::Attribute> {
     vec![cx.attribute(sp, cx.meta_list(sp, token::InternedString::new("allow"), vec![cx.meta_word(sp, token::InternedString::new("dead_code"))]))]
 }
+
+//Shamelessly borrowed from the lint :)
+pub fn is_snake_case(name: &str) -> bool {
+    let mut allow_underscore = false;
+    name.chars().all(|c| {
+        allow_underscore = match c {
+            c if c.is_lowercase() || c.is_numeric() => true,
+            '_' if allow_underscore => false,
+            _ => return false,
+        };
+        true
+    })
+}
