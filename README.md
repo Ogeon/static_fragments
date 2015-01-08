@@ -15,7 +15,8 @@ benefits of precompiled templates are:
 #How Is It Used?
 
 `template! module_name {"Template string"}` is used to create a template from
-a string literal.
+a string literal and `template_file! module_name {"path/to/template/file"}` is
+used to read it from a file.
 
 The following example is the same as the `conditions` example from Fragments
 and it works more or less the same, with a few exceptions. The

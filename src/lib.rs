@@ -5,6 +5,7 @@ extern crate rustc;
 extern crate fragments;
 
 use std::collections::{HashMap, HashSet};
+use std::io::{File, BufferedReader};
 
 use syntax::{ast, codemap};
 use syntax::ext::base::{
@@ -33,8 +34,10 @@ struct IdentGroup {
 #[plugin_registrar]
 #[doc(hidden)]
 pub fn macro_registrar(reg: &mut Registry) {
-    let expander = box from_string as Box<IdentMacroExpander>;
-    reg.register_syntax_extension(token::intern("template"), IdentTT(expander, None));
+    let from_string_expander = box from_string as Box<IdentMacroExpander>;
+    reg.register_syntax_extension(token::intern("template"), IdentTT(from_string_expander, None));
+    let from_file_expander = box from_file as Box<IdentMacroExpander>;
+    reg.register_syntax_extension(token::intern("template_file"), IdentTT(from_file_expander, None));
 }
 
 fn from_string<'cx>(cx: &'cx mut ExtCtxt, _sp: codemap::Span, module_ident: ast::Ident, tts: Vec<ast::TokenTree>) -> Box<MacResult + 'cx> {
@@ -42,6 +45,18 @@ fn from_string<'cx>(cx: &'cx mut ExtCtxt, _sp: codemap::Span, module_ident: ast:
     let sp = parser.span;
     let (string, _) = parser.parse_str();
     let template = match Template::from_chars(&mut string.get().chars()) {
+        Ok(template) => template,
+        Err(e) => cx.span_fatal(sp, e.as_slice())
+    };
+    build_template(cx, sp, module_ident, template.get_tokens())
+}
+
+fn from_file<'cx>(cx: &'cx mut ExtCtxt, _sp: codemap::Span, module_ident: ast::Ident, tts: Vec<ast::TokenTree>) -> Box<MacResult + 'cx> {
+    let mut parser = cx.new_parser_from_tts(tts.as_slice());
+    let sp = parser.span;
+    let (path, _) = parser.parse_str();
+    let file = File::open(&Path::new(path.get()));
+    let template = match Template::from_buffer(&mut BufferedReader::new(file)) {
         Ok(template) => template,
         Err(e) => cx.span_fatal(sp, e.as_slice())
     };
