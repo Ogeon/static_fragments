@@ -188,6 +188,8 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
     let template_show_block = cx.block(sp, template_show_stmts, None);
     items.push(utils::implement_show(cx, template_generics.clone(), ty_template.clone(), template_show_block));
 
+    items.push(utils::implement_template_content(cx, template_generics.clone(), ty_template.clone()));
+
     let module = cx.item_mod(sp, sp, module_ident, Vec::new(), Vec::new(), items);
     MacItems::new(vec![module].into_iter())
 }

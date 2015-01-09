@@ -27,6 +27,14 @@ pub fn implement_show(cx: &mut ExtCtxt, generics: ast::Generics, ty: P<ast::Ty>,
     }).unwrap()
 }
 
+pub fn implement_template_content(cx: &mut ExtCtxt, generics: ast::Generics, ty: P<ast::Ty>) -> P<ast::Item> {
+    quote_item!(cx, impl$generics ::fragments::TemplateContent$generics for $ty {
+        fn into_template_content(self) -> ::fragments::ContentType$generics {
+            ::fragments::ContentType::Show(box self as Box<::std::fmt::Show>)
+        }
+    }).unwrap()
+}
+
 pub fn mk_field(sp: codemap::Span, ident: ast::Ident, ty: P<ast::Ty>, default_expr: P<ast::Expr>) -> (codemap::Spanned<ast::StructField_>, ast::Field) {
     let field_def = ast::StructField_ {
         kind: ast::NamedField(ident, ast::Public),
