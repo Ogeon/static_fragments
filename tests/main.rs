@@ -1,9 +1,11 @@
 #![feature(plugin)]
+#![allow(unstable)]
 
 #[plugin]
 #[no_link]
 extern crate static_fragments;
 extern crate fragments;
+use std::borrow::ToOwned;
 
 template! template1 ("Hello, [[:name]]! This is a [[:something]] template.");
 template! template2 ("really [[:something]]");
@@ -18,5 +20,5 @@ fn template_in_template() {
 
     template1.insert_something(template2);
 
-    assert_eq!(template1.to_string(), "Hello, Peter! This is a really nice template.".to_string());
+    assert_eq!(template1.to_string(), "Hello, Peter! This is a really nice template.".to_owned());
 }

@@ -18,8 +18,8 @@ impl SelfType {
     }
 }
 
-pub fn implement_show(cx: &mut ExtCtxt, generics: ast::Generics, ty: P<ast::Ty>, block: P<ast::Block>) -> P<ast::Item> {
-    quote_item!(cx, impl$generics ::std::fmt::Show for $ty {
+pub fn implement_fmt(cx: &mut ExtCtxt, generics: ast::Generics, ty: P<ast::Ty>, block: P<ast::Block>) -> P<ast::Item> {
+    quote_item!(cx, impl$generics ::std::fmt::String for $ty {
         fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
             $block
             Ok(())
@@ -30,7 +30,7 @@ pub fn implement_show(cx: &mut ExtCtxt, generics: ast::Generics, ty: P<ast::Ty>,
 pub fn implement_template_content(cx: &mut ExtCtxt, generics: ast::Generics, ty: P<ast::Ty>) -> P<ast::Item> {
     quote_item!(cx, impl$generics ::fragments::TemplateContent$generics for $ty {
         fn into_template_content(self) -> ::fragments::ContentType$generics {
-            ::fragments::ContentType::Show(box self as Box<::std::fmt::Show>)
+            ::fragments::ContentType::Fmt(Box::new(self) as Box<::std::fmt::String>)
         }
     }).unwrap()
 }

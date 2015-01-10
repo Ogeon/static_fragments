@@ -1,4 +1,5 @@
 #![feature(plugin_registrar, quote)]
+#![allow(unstable)]
 
 extern crate syntax;
 extern crate rustc;
@@ -34,9 +35,9 @@ struct IdentGroup {
 #[plugin_registrar]
 #[doc(hidden)]
 pub fn macro_registrar(reg: &mut Registry) {
-    let from_string_expander = box from_string as Box<IdentMacroExpander>;
+    let from_string_expander = Box::new(from_string) as Box<IdentMacroExpander>;
     reg.register_syntax_extension(token::intern("template"), IdentTT(from_string_expander, None));
-    let from_file_expander = box from_file as Box<IdentMacroExpander>;
+    let from_file_expander = Box::new(from_file) as Box<IdentMacroExpander>;
     reg.register_syntax_extension(token::intern("template_file"), IdentTT(from_file_expander, None));
 }
 
@@ -70,7 +71,7 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
     let mut expected_placeholders = HashSet::new();
     let mut conditions = HashMap::new();
     let mut generators = HashMap::new();
-    let template_show_stmts = parse_tokens(cx, sp, tokens, &mut placeholders, &mut expected_placeholders, &mut conditions, &mut generators);
+    let template_fmt_stmts = parse_tokens(cx, sp, tokens, &mut placeholders, &mut expected_placeholders, &mut conditions, &mut generators);
 
     for label in expected_placeholders.into_iter() {
         if !placeholders.contains_key(label) {
@@ -185,8 +186,8 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
     let template_impl = utils::mk_impl(cx, sp, template_generics.clone(), None, ty_template.clone(), template_methods);
     items.push(template_impl);
 
-    let template_show_block = cx.block(sp, template_show_stmts, None);
-    items.push(utils::implement_show(cx, template_generics.clone(), ty_template.clone(), template_show_block));
+    let template_fmt_block = cx.block(sp, template_fmt_stmts, None);
+    items.push(utils::implement_fmt(cx, template_generics.clone(), ty_template.clone(), template_fmt_block));
 
     items.push(utils::implement_template_content(cx, template_generics.clone(), ty_template.clone()));
 
@@ -380,7 +381,7 @@ fn construct_generator_setter(
 
     let args = vec![cx.arg(sp, ident_generator_var, ty_t)];
 
-    let block = cx.block(sp, vec![cx.stmt_expr(quote_expr!(cx, self.$ident_field = Some(box $ident_generator_var as Box<$ty_generator_lifetime>)))], None);
+    let block = cx.block(sp, vec![cx.stmt_expr(quote_expr!(cx, self.$ident_field = Some(Box::new($ident_generator_var) as Box<$ty_generator_lifetime>)))], None);
 
     let bound = cx.typarambound(path_generator_trait);
 
