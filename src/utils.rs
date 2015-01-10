@@ -18,11 +18,10 @@ impl SelfType {
     }
 }
 
-pub fn implement_fmt(cx: &mut ExtCtxt, generics: ast::Generics, ty: P<ast::Ty>, block: P<ast::Block>) -> P<ast::Item> {
+pub fn implement_fmt(cx: &mut ExtCtxt, generics: ast::Generics, ty: P<ast::Ty>) -> P<ast::Item> {
     quote_item!(cx, impl$generics ::std::fmt::String for $ty {
         fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-            $block
-            Ok(())
+            render(self as &InnerTemplate, f)
         }
     }).unwrap()
 }
@@ -78,6 +77,7 @@ pub fn mk_impl(
 pub fn mk_method(
     cx: &mut ExtCtxt,
     sp: codemap::Span,
+    public: bool,
     generics: ast::Generics,
     ident: ast::Ident,
     self_type: SelfType,
@@ -105,10 +105,51 @@ pub fn mk_method(
         attrs: ignore_dead_code(cx, sp),
         id: ast::DUMMY_NODE_ID,
         span: sp,
-        node: ast::MethDecl(ident, generics, syntax::abi::Rust, self_type, ast::Unsafety::Normal, decl, block, ast::Public)
+        node: ast::MethDecl(ident, generics, syntax::abi::Rust, self_type, ast::Unsafety::Normal, decl, block, if public {ast::Public} else {ast::Inherited})
     };
 
     ast::MethodImplItem(P(method))
+}
+
+pub fn mk_trait_method(
+    cx: &mut ExtCtxt,
+    sp: codemap::Span,
+    generics: ast::Generics,
+    ident: ast::Ident,
+    self_type: SelfType,
+    args: Vec<ast::Arg>,
+    return_type: Option<P<ast::Ty>>
+) -> ast::TraitItem {
+    let self_type = codemap::Spanned {
+        node: self_type.into_explicit(cx),
+        span: sp
+    };
+
+    let output = match return_type {
+        Some(ty) => ty,
+        None => cx.ty(sp, ast::TyTup(Vec::new()))
+    };
+
+    let decl = P(ast::FnDecl {
+        inputs: vec![cx.arg(sp, cx.ident_of("self"), cx.ty_infer(sp))].into_iter().chain(args.into_iter()).collect(),
+        output: ast::Return(output),
+        variadic: false
+    });
+
+    let method = ast::TypeMethod {
+        ident: ident,
+        attrs: Vec::new(),
+        unsafety: ast::Unsafety::Normal,
+        abi: syntax::abi::Rust,
+        decl: decl,
+        generics: generics,
+        explicit_self: self_type,
+        id: ast::DUMMY_NODE_ID,
+        span: sp,
+        vis: ast::Inherited
+    };
+
+    ast::RequiredMethod(method)
 }
 
 fn ignore_dead_code(cx: &mut ExtCtxt, sp: codemap::Span) -> Vec<ast::Attribute> {
