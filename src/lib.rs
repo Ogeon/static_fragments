@@ -85,6 +85,7 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
     let ident_new = cx.ident_of("new");
     let lifetime_content = cx.lifetime_def(sp, cx.name_of("'c"), Vec::new());
     let lifetime_ref = cx.lifetime_def(sp, cx.name_of("'r"), Vec::new());
+    let lifetime_traitobj = cx.lifetime_def(sp, cx.name_of("'p"), Vec::new());
     let ty_template = cx.ty_path(cx.path_all(
         sp,
         false,
@@ -114,6 +115,17 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
         ),
         OwnedSlice::from_vec(vec![ast::RegionTyParamBound(lifetime_content.lifetime)])
     );
+    let ty_generator_ref = cx.ty_sum(
+        cx.path_all(
+            sp,
+            true,
+            vec![cx.ident_of("fragments"), cx.ident_of("Generator")],
+            Vec::new(),
+            Vec::new(),
+            Vec::new()
+        ),
+        OwnedSlice::from_vec(vec![ast::RegionTyParamBound(lifetime_ref.lifetime)])
+    );
     let ty_option_box_generator = cx.ty_option(cx.ty_path(cx.path_all(
         sp,
         true,
@@ -122,8 +134,20 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
         vec![ty_generator.clone()],
         Vec::new()
     )));
-    let ty_option_ref_generator = cx.ty_option(cx.ty_rptr(sp, ty_generator.clone(), Some(lifetime_ref.lifetime), ast::MutImmutable));
+    let ty_option_ref_generator = cx.ty_option(cx.ty_rptr(sp, ty_generator_ref.clone(), Some(lifetime_ref.lifetime), ast::MutImmutable));
     let ty_bool = cx.ty_path(cx.path(sp, vec![cx.ident_of("bool")]));
+    let ty_dynamic_inner = cx.ty_sum(
+        cx.path_all(
+            sp,
+            true,
+            vec![cx.ident_of("fragments"), cx.ident_of("InnerTemplate")],
+            vec![lifetime_content.lifetime],
+            Vec::new(),
+            Vec::new()
+        ),
+        OwnedSlice::from_vec(vec![ast::RegionTyParamBound(lifetime_content.lifetime)])
+    );
+    let ty_traitobj_dynamic_inner = cx.ty_rptr(sp, ty_dynamic_inner.clone(), Some(lifetime_traitobj.lifetime), ast::MutImmutable);
     let trait_inner = cx.trait_ref(cx.path_all(
         sp,
         false,
@@ -135,6 +159,24 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
     let expr_none = cx.expr_none(sp);
     let expr_false = cx.expr_bool(sp, false);
 
+    let generics_content = ast::Generics {
+        lifetimes: vec![lifetime_content.clone()],
+        ty_params: OwnedSlice::empty(),
+        where_clause: ast::WhereClause {
+            id: ast::DUMMY_NODE_ID,
+            predicates: Vec::new()
+        }
+    };
+
+    let generics_traitobj_content = ast::Generics {
+        lifetimes: vec![lifetime_traitobj.clone(), lifetime_content.clone()],
+        ty_params: OwnedSlice::empty(),
+        where_clause: ast::WhereClause {
+            id: ast::DUMMY_NODE_ID,
+            predicates: Vec::new()
+        }
+    };
+
     let mut trait_inner_methods = Vec::new();
 
     let mut template_fields = Vec::new();
@@ -142,9 +184,12 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
     let mut template_methods = Vec::new();
     let mut template_get_methods = Vec::new();
 
-    for (_label, idents) in placeholders.into_iter() {
+    let mut dynamic_get_methods = Vec::new();
+
+    for (label, idents) in placeholders.into_iter() {
         let ident_field = idents.field;
         let block_template_get = cx.block(sp, Vec::new(), Some(quote_expr!(cx, self.$ident_field.as_ref())));
+        let block_dynamic_get = cx.block(sp, Vec::new(), Some(quote_expr!(cx, self.get_content($label))));
 
         let (field_def, field_assign) = utils::mk_field(sp, idents.field, ty_option_content.clone(), expr_none.clone());
 
@@ -157,12 +202,14 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
                 cx.block(sp, vec![cx.stmt_expr(quote_expr!(cx, self.$ident_field = Some($ident_param.into_template_content())))], None)
             })
         );
-        template_get_methods.push(construct_getter(cx, sp, idents.get_function, Some(lifetime_ref.clone()), ty_option_ref_content.clone(), block_template_get))
+        template_get_methods.push(construct_getter(cx, sp, idents.get_function, Some(lifetime_ref.clone()), ty_option_ref_content.clone(), block_template_get));
+        dynamic_get_methods.push(construct_getter(cx, sp, idents.get_function, Some(lifetime_ref.clone()), ty_option_ref_content.clone(), block_dynamic_get));
     }
 
-    for (_label, idents) in conditions.into_iter() {
+    for (label, idents) in conditions.into_iter() {
         let ident_field = idents.field;
         let block_template_get = cx.block(sp, Vec::new(), Some(quote_expr!(cx, self.$ident_field)));
+        let block_dynamic_get = cx.block(sp, Vec::new(), Some(quote_expr!(cx, self.get_condition($label))));
 
         let (field_def, field_assign) = utils::mk_field(sp, idents.field, ty_bool.clone(), expr_false.clone());
         
@@ -175,12 +222,14 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
                 cx.block(sp, vec![cx.stmt_expr(quote_expr!(cx, self.$ident_field = $ident_param))], None)
             })
         );
-        template_get_methods.push(construct_getter(cx, sp, idents.get_function, None, ty_bool.clone(), block_template_get))
+        template_get_methods.push(construct_getter(cx, sp, idents.get_function, None, ty_bool.clone(), block_template_get));
+        dynamic_get_methods.push(construct_getter(cx, sp, idents.get_function, None, ty_bool.clone(), block_dynamic_get));
     }
 
-    for (_label, idents) in generators.into_iter() {
+    for (label, idents) in generators.into_iter() {
         let ident_field = idents.field;
         let block_template_get = cx.block(sp, Vec::new(), Some(quote_expr!(cx, self.$ident_field.as_ref().map(|g| &**g))));
+        let block_dynamic_get = cx.block(sp, Vec::new(), Some(quote_expr!(cx, self.get_generator($label).map(|g| &*g))));
 
         let (field_def, field_assign) = utils::mk_field(sp, idents.field, ty_option_box_generator.clone(), expr_none.clone());
         
@@ -193,17 +242,9 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
                 cx.block(sp, vec![cx.stmt_expr(quote_expr!(cx, self.$ident_field = Some(Box::new($ident_param) as Box<$ty>)))], None)
             })
         );
-        template_get_methods.push(construct_getter(cx, sp, idents.get_function, Some(lifetime_ref.clone()), ty_option_ref_generator.clone(), block_template_get))
+        template_get_methods.push(construct_getter(cx, sp, idents.get_function, Some(lifetime_ref.clone()), ty_option_ref_generator.clone(), block_template_get));
+        dynamic_get_methods.push(construct_getter(cx, sp, idents.get_function, Some(lifetime_ref.clone()), ty_option_ref_generator.clone(), block_dynamic_get));
     }
-
-    let template_generics = ast::Generics {
-        lifetimes: vec![lifetime_content.clone()],
-        ty_params: OwnedSlice::empty(),
-        where_clause: ast::WhereClause {
-            id: ast::DUMMY_NODE_ID,
-            predicates: Vec::new()
-        }
-    };
 
     let template_struct = cx.item_struct_poly(sp, ident_template,
         ast::StructDef {
@@ -214,7 +255,7 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
             },
             fields: template_fields
         },
-        template_generics.clone()
+        generics_content.clone()
     ).map(|mut s| {
         s.vis = ast::Public;
         s
@@ -225,7 +266,7 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
         sp, vec![],
         Some(cx.expr_struct_ident(sp, ident_template, template_constructor))
     );
-    let function_new = cx.item_fn_poly(sp, ident_new, Vec::new(), ty_template.clone(), template_generics.clone(), block_new).map(|mut f| {
+    let function_new = cx.item_fn_poly(sp, ident_new, Vec::new(), ty_template.clone(), generics_content.clone(), block_new).map(|mut f| {
         f.vis = ast::Public;
         f
     });
@@ -236,15 +277,18 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
 
     items.push(construct_trait_inner(cx, sp, ident_inner, lifetime_content.clone(), trait_inner_methods));
 
-    let template_impl = utils::mk_impl(cx, sp, template_generics.clone(), None, ty_template.clone(), template_methods);
+    let template_impl = utils::mk_impl(cx, sp, generics_content.clone(), None, ty_template.clone(), template_methods);
     items.push(template_impl);
 
-    let template_impl_inner = utils::mk_impl(cx, sp, template_generics.clone(), Some(trait_inner), ty_template.clone(), template_get_methods);
+    let template_impl_inner = utils::mk_impl(cx, sp, generics_content.clone(), Some(trait_inner.clone()), ty_template.clone(), template_get_methods);
     items.push(template_impl_inner);
 
-    items.push(utils::implement_fmt(cx, template_generics.clone(), ty_template.clone()));
+    let dynamic_impl_inner = utils::mk_impl(cx, sp, generics_traitobj_content.clone(), Some(trait_inner.clone()), ty_traitobj_dynamic_inner.clone(), dynamic_get_methods);
+    items.push(dynamic_impl_inner);
 
-    items.push(utils::implement_template_content(cx, template_generics.clone(), ty_template.clone()));
+    items.push(utils::implement_fmt(cx, generics_content.clone(), ty_template.clone()));
+
+    items.push(utils::implement_template_content(cx, generics_content.clone(), ty_template.clone()));
 
     let module = cx.item_mod(sp, sp, module_ident, Vec::new(), Vec::new(), items);
     MacItems::new(vec![module].into_iter())
