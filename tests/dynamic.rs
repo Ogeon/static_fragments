@@ -11,7 +11,6 @@ static PETER: &'static str = "Peter";
 static NICE: &'static str = "nice";
 
 template! template1 ("Hello, [[:name]]! This is a [[:something]] template.");
-template! template2 ("really [[:something]]");
 
 #[test]
 fn wrap_identical() {

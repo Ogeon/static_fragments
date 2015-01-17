@@ -20,7 +20,7 @@ use syntax::ptr::P;
 
 use rustc::plugin::Registry;
 
-use fragments::{Template, Token, InnerTemplate};
+use fragments::{Template, Token};
 
 use utils::SelfType;
 
