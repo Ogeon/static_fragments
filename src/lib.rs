@@ -272,6 +272,8 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
 
     template_generator_match_arms.push(cx.arm(sp, vec![cx.pat_wild(sp)], expr_none.clone()));
 
+    template_methods.push(utils::implement_dynamic_wrap(cx, sp, lifetime_content.clone()));
+
     let template_struct = cx.item_struct_poly(sp, ident_template,
         ast::StructDef {
         ctor_id: if template_fields.len() == 0 {

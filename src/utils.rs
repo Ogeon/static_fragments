@@ -3,6 +3,7 @@ use syntax::ext::base::ExtCtxt;
 use syntax::ext::build::AstBuilder;
 use syntax::parse::token;
 use syntax::ptr::P;
+use syntax::owned_slice::OwnedSlice;
 
 pub enum SelfType {
     Ref(Option<ast::Lifetime>),
@@ -32,6 +33,36 @@ pub fn implement_template_content(cx: &mut ExtCtxt, generics: ast::Generics, ty:
             ::fragments::ContentType::Fmt(Box::new(self) as Box<::std::fmt::String>)
         }
     }).unwrap()
+}
+
+pub fn implement_dynamic_wrap(cx: &mut ExtCtxt, sp: codemap::Span, lifetime_content: ast::LifetimeDef) -> ast::ImplItem {
+    let block = cx.block(sp, Vec::new(), Some(quote_expr!(cx, ::fragments::Shell::new(self))));
+
+    let lifetime_shell = cx.lifetime_def(sp, cx.name_of("'s"), vec![lifetime_content.lifetime]);
+
+    let self_type = SelfType::Ref(Some(lifetime_shell.lifetime));
+
+    let ty_shell = cx.ty_path(cx.path_all(
+        sp,
+        true,
+        vec![cx.ident_of("fragments"), cx.ident_of("Shell")],
+        vec![lifetime_shell.lifetime, lifetime_content.lifetime],
+        Vec::new(),
+        Vec::new()
+    ));
+
+    let generics = ast::Generics {
+        lifetimes: vec![lifetime_shell],
+        ty_params: OwnedSlice::empty(),
+        where_clause: ast::WhereClause {
+            id: ast::DUMMY_NODE_ID,
+            predicates: Vec::new()
+        }
+    };
+
+    let ident = cx.ident_of("dynamic_wrap");
+
+    mk_method(cx, sp, true, generics, ident, self_type, Vec::new(), block, Some(ty_shell))
 }
 
 pub fn mk_field(sp: codemap::Span, ident: ast::Ident, ty: P<ast::Ty>, default_expr: P<ast::Expr>) -> (codemap::Spanned<ast::StructField_>, ast::Field) {
