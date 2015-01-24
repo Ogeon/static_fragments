@@ -226,7 +226,7 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
         template_generator_match_arms
     ));
 
-    let module = cx.item_mod(sp, sp, module_ident, Vec::new(), Vec::new(), items);
+    let module = cx.item_mod(sp, sp, module_ident, Vec::new(), items);
     MacItems::new(vec![module].into_iter())
 }
 
