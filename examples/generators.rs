@@ -23,7 +23,7 @@ fn main() {
     //I expect you to make cooler generators, yourself ;)
     template.insert_generator_join(
         |&: parts: &[String], f: &mut fmt::Formatter| {
-            fmt::String::fmt(&parts.concat(), f)
+            fmt::Display::fmt(&parts.concat(), f)
         }
     );
 

@@ -243,7 +243,7 @@ fn parse_tokens<'a>(
         match token {
             &Token::String(ref string) => {
                 let string = string.as_slice();
-                quote_stmt!(cx, try!(::std::fmt::String::fmt($string, f)))
+                quote_stmt!(cx, try!(::std::fmt::Display::fmt($string, f)))
             },
             &Token::Placeholder(ref label) => {
                 let get = cx.ident_of(format!("get_content_{}", label).as_slice());
@@ -263,7 +263,7 @@ fn parse_tokens<'a>(
                 }
 
                 quote_stmt!(cx, if let Some(content) = template.$get() {
-                    try!(::std::fmt::String::fmt(content, f));
+                    try!(::std::fmt::Display::fmt(content, f));
                 })
             },
             &Token::Conditional(ref label, expected, ref tokens) => {
