@@ -281,7 +281,7 @@ fn parse_tokens<'a>(
                     });
                 }
 
-                let subsequence = parse_tokens(cx, sp, &*tokens, placeholders, expected_placeholders, conditions, generators);
+                let subsequence = parse_tokens(cx, sp, &**tokens, placeholders, expected_placeholders, conditions, generators);
 
                 quote_stmt!(cx, if template.$get() == $expected {
                     $subsequence
@@ -298,7 +298,7 @@ fn parse_tokens<'a>(
                     expected_placeholders.insert(&**label);
                 }
 
-                let subsequence = parse_tokens(cx, sp, &*tokens, placeholders, expected_placeholders, conditions, generators);
+                let subsequence = parse_tokens(cx, sp, &**tokens, placeholders, expected_placeholders, conditions, generators);
 
                 quote_stmt!(cx, if template.$get().is_some() == $expected {
                     $subsequence
