@@ -24,7 +24,7 @@ and it works more or less the same, with a few exceptions. The
 plugin, so the `fragments` crate is still necessary.
 
 ```Rust
-#![feature(plugin)]
+#![feature(plugin, core)]
 
 #[plugin]
 #[no_link]

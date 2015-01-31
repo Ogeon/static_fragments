@@ -1,4 +1,4 @@
-#![feature(plugin)]
+#![feature(plugin, core)]
 
 #[plugin]
 #[no_link]

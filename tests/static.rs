@@ -1,5 +1,4 @@
-#![feature(plugin)]
-#![allow(unstable)]
+#![feature(plugin, collections, core)]
 
 #[plugin]
 #[no_link]

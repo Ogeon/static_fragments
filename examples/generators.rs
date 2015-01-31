@@ -1,4 +1,4 @@
-#![feature(plugin)]
+#![feature(plugin, core)]
 
 #[plugin]
 #[no_link]
@@ -8,7 +8,6 @@ use std::fmt;
 
 template! greeting {"Hello, [[:name]]! Is it written as 'white space' or '[[+join white space]]'?"}
 
-#[allow(unstable)]
 fn main() {
     //Create a new Template
     let mut template = greeting::new();
