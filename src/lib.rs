@@ -42,24 +42,24 @@ pub fn macro_registrar(reg: &mut Registry) {
 }
 
 fn from_string<'cx>(cx: &'cx mut ExtCtxt, _sp: codemap::Span, module_ident: ast::Ident, tts: Vec<ast::TokenTree>) -> Box<MacResult + 'cx> {
-    let mut parser = cx.new_parser_from_tts(&*tts);
+    let mut parser = cx.new_parser_from_tts(&tts);
     let sp = parser.span;
     let (string, _) = parser.parse_str();
     let template = match Template::from_chars(string.get().chars()) {
         Ok(template) => template,
-        Err(e) => cx.span_fatal(sp, &*e)
+        Err(e) => cx.span_fatal(sp, &e)
     };
     build_template(cx, sp, module_ident, template.get_tokens())
 }
 
 fn from_file<'cx>(cx: &'cx mut ExtCtxt, _sp: codemap::Span, module_ident: ast::Ident, tts: Vec<ast::TokenTree>) -> Box<MacResult + 'cx> {
-    let mut parser = cx.new_parser_from_tts(&*tts);
+    let mut parser = cx.new_parser_from_tts(&tts);
     let sp = parser.span;
     let (path, _) = parser.parse_str();
     let file = File::open(&Path::new(path.get()));
     let template = match Template::from_buffer(&mut BufferedReader::new(file)) {
         Ok(template) => template,
-        Err(e) => cx.span_fatal(sp, &*e)
+        Err(e) => cx.span_fatal(sp, &e)
     };
     build_template(cx, sp, module_ident, template.get_tokens())
 }
@@ -76,8 +76,8 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
     let stmts_render = parse_tokens(cx, sp, tokens, &mut placeholders, &mut expected_placeholders, &mut conditions, &mut generators);
 
     for label in expected_placeholders.into_iter() {
-        if !placeholders.contains_key(label) {
-            cx.span_err(sp, &*format!("the missing placeholder '{}' is used in a condition", label));
+        if !placeholders.contains_key(&label[]) {
+            cx.span_err(sp, &format!("the missing placeholder '{}' is used in a condition", label));
         }
     }
 
@@ -245,20 +245,20 @@ fn parse_tokens<'a>(
                 quote_stmt!(cx, try!(::std::fmt::Display::fmt($string, f)))
             },
             &Token::Placeholder(ref label) => {
-                let get = cx.ident_of(&*format!("get_content_{}", label));
+                let get = cx.ident_of(&format!("get_content_{}", label));
 
-                if !expected_placeholders.contains(&**label) {
-                    if !utils::is_snake_case(&**label) {
-                        cx.span_err(sp, &*format!("non snake case label: '{}'", label));
+                if !expected_placeholders.contains(&label[]) {
+                    if !utils::is_snake_case(label) {
+                        cx.span_err(sp, &format!("non snake case label: '{}'", label));
                     }
 
-                    placeholders.insert(&**label, IdentGroup {
-                        field: cx.ident_of(&*format!("content_{}", label)),
-                        set_function: cx.ident_of(&*format!("insert_{}", label)),
+                    placeholders.insert(label, IdentGroup {
+                        field: cx.ident_of(&format!("content_{}", label)),
+                        set_function: cx.ident_of(&format!("insert_{}", label)),
                         get_function: get,
-                        unset_function: Some(cx.ident_of(&*format!("unset_{}", label)))
+                        unset_function: Some(cx.ident_of(&format!("unset_{}", label)))
                     });
-                    expected_placeholders.insert(&**label);
+                    expected_placeholders.insert(label);
                 }
 
                 quote_stmt!(cx, if let Some(content) = template.$get() {
@@ -266,58 +266,58 @@ fn parse_tokens<'a>(
                 })
             },
             &Token::Conditional(ref label, expected, ref tokens) => {
-                let get = cx.ident_of(&*format!("get_condition_{}", label));
+                let get = cx.ident_of(&format!("get_condition_{}", label));
 
-                if !conditions.contains_key(&**label) {
-                    if !utils::is_snake_case(&**label) {
-                        cx.span_err(sp, &*format!("non snake case label: '{}'", label));
+                if !conditions.contains_key(&label[]) {
+                    if !utils::is_snake_case(label) {
+                        cx.span_err(sp, &format!("non snake case label: '{}'", label));
                     }
                     
-                    conditions.insert(&**label, IdentGroup {
-                        field: cx.ident_of(&*format!("condition_{}", label)),
-                        set_function: cx.ident_of(&*format!("set_{}", label)),
+                    conditions.insert(label, IdentGroup {
+                        field: cx.ident_of(&format!("condition_{}", label)),
+                        set_function: cx.ident_of(&format!("set_{}", label)),
                         get_function: get,
                         unset_function: None
                     });
                 }
 
-                let subsequence = parse_tokens(cx, sp, &**tokens, placeholders, expected_placeholders, conditions, generators);
+                let subsequence = parse_tokens(cx, sp, tokens, placeholders, expected_placeholders, conditions, generators);
 
                 quote_stmt!(cx, if template.$get() == $expected {
                     $subsequence
                 })
             },
             &Token::ContentConditional(ref label, expected, ref tokens) => {
-                let get = cx.ident_of(&*format!("get_content_{}", label));
+                let get = cx.ident_of(&format!("get_content_{}", label));
 
-                if !expected_placeholders.contains(&**label) {
-                    if !utils::is_snake_case(&**label) {
-                        cx.span_err(sp, &*format!("non snake case label: '{}'", label));
+                if !expected_placeholders.contains(&label[]) {
+                    if !utils::is_snake_case(label) {
+                        cx.span_err(sp, &format!("non snake case label: '{}'", label));
                     }
 
-                    expected_placeholders.insert(&**label);
+                    expected_placeholders.insert(label);
                 }
 
-                let subsequence = parse_tokens(cx, sp, &**tokens, placeholders, expected_placeholders, conditions, generators);
+                let subsequence = parse_tokens(cx, sp, tokens, placeholders, expected_placeholders, conditions, generators);
 
                 quote_stmt!(cx, if template.$get().is_some() == $expected {
                     $subsequence
                 })
             },
             &Token::Generated(ref label, ref args) => {
-                let get = cx.ident_of(&*format!("get_generator_{}", label));
+                let get = cx.ident_of(&format!("get_generator_{}", label));
 
 
-                if !generators.contains_key(&**label) {
-                    if !utils::is_snake_case(&**label) {
-                        cx.span_err(sp, &*format!("non snake case label: '{}'", label));
+                if !generators.contains_key(&label[]) {
+                    if !utils::is_snake_case(label) {
+                        cx.span_err(sp, &format!("non snake case label: '{}'", label));
                     }
 
-                    generators.insert(&**label, IdentGroup {
-                        field: cx.ident_of(&*format!("generator_{}", label)),
-                        set_function: cx.ident_of(&*format!("insert_generator_{}", label)),
+                    generators.insert(label, IdentGroup {
+                        field: cx.ident_of(&format!("generator_{}", label)),
+                        set_function: cx.ident_of(&format!("insert_generator_{}", label)),
                         get_function: get,
-                        unset_function: Some(cx.ident_of(&*format!("unset_generator_{}", label)))
+                        unset_function: Some(cx.ident_of(&format!("unset_generator_{}", label)))
                     });
                 }
 
