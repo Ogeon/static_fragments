@@ -45,7 +45,7 @@ fn from_string<'cx>(cx: &'cx mut ExtCtxt, _sp: codemap::Span, module_ident: ast:
     let mut parser = cx.new_parser_from_tts(&*tts);
     let sp = parser.span;
     let (string, _) = parser.parse_str();
-    let template = match Template::from_chars(&mut string.get().chars()) {
+    let template = match Template::from_chars(string.get().chars()) {
         Ok(template) => template,
         Err(e) => cx.span_fatal(sp, &*e)
     };
