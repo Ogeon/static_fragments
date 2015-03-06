@@ -1,8 +1,6 @@
 #![feature(plugin)]
+#![plugin(static_fragments)]
 
-#[plugin]
-#[no_link]
-extern crate static_fragments;
 extern crate fragments;
 use std::fmt;
 
@@ -21,7 +19,7 @@ fn main() {
     //This generator will just concatenate the arguments.
     //I expect you to make cooler generators, yourself ;)
     template.insert_generator_join(
-        |&: parts: &[String], f: &mut fmt::Formatter| {
+        |parts: &[String], f: &mut fmt::Formatter| {
             fmt::Display::fmt(&parts.concat(), f)
         }
     );

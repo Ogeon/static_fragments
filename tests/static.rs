@@ -1,8 +1,6 @@
-#![feature(plugin, core)]
+#![feature(plugin)]
+#![plugin(static_fragments)]
 
-#[plugin]
-#[no_link]
-extern crate static_fragments;
 extern crate fragments;
 use std::borrow::ToOwned;
 

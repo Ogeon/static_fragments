@@ -25,10 +25,8 @@ plugin, so the `fragments` crate is still necessary.
 
 ```Rust
 #![feature(plugin)]
+#![plugin(static_fragments)]
 
-#[plugin]
-#[no_link]
-extern crate static_fragments;
 extern crate fragments;
 
 template! greeting {"Hello, [[:name]]![[?show_hidden]] The condition is true.[[/]]"}

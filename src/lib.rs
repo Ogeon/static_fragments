@@ -1,21 +1,24 @@
-#![feature(plugin_registrar, quote, rustc_private, path, io, core)]
+#![feature(plugin_registrar, quote, rustc_private, path, io, fs)]
 
 extern crate syntax;
 extern crate rustc;
 extern crate fragments;
 
 use std::collections::{HashMap, HashSet};
-use std::old_io::{File, BufferedReader};
+use std::io::BufReader;
+use std::fs::File;
+use std::path::Path;
 
 use syntax::{ast, codemap};
 use syntax::ext::base::{
-    ExtCtxt, MacResult, MacItems,
+    ExtCtxt, MacResult, MacEager,
     IdentTT, IdentMacroExpander
 };
 use syntax::owned_slice::OwnedSlice;
 use syntax::ext::build::AstBuilder;
 use syntax::parse::token;
 use syntax::ptr::P;
+use syntax::util::small_vector::SmallVector;
 
 use rustc::plugin::Registry;
 
@@ -45,7 +48,7 @@ fn from_string<'cx>(cx: &'cx mut ExtCtxt, _sp: codemap::Span, module_ident: ast:
     let mut parser = cx.new_parser_from_tts(&tts);
     let sp = parser.span;
     let (string, _) = parser.parse_str();
-    let template = match Template::from_chars(string.get().chars()) {
+    let template = match Template::from_chars(string.chars()) {
         Ok(template) => template,
         Err(e) => cx.span_fatal(sp, &e)
     };
@@ -56,8 +59,8 @@ fn from_file<'cx>(cx: &'cx mut ExtCtxt, _sp: codemap::Span, module_ident: ast::I
     let mut parser = cx.new_parser_from_tts(&tts);
     let sp = parser.span;
     let (path, _) = parser.parse_str();
-    let file = File::open(&Path::new(path.get()));
-    let template = match Template::from_buffer(&mut BufferedReader::new(file)) {
+    let file = File::open(&Path::new(&*path)).map_err(|e| e.to_string());
+    let template = match file.and_then(|f| Template::from_buffer(&mut BufReader::new(f))) {
         Ok(template) => template,
         Err(e) => cx.span_fatal(sp, &e)
     };
@@ -76,7 +79,7 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
     let stmts_render = parse_tokens(cx, sp, tokens, &mut placeholders, &mut expected_placeholders, &mut conditions, &mut generators);
 
     for label in expected_placeholders.into_iter() {
-        if !placeholders.contains_key(&label[]) {
+        if !placeholders.contains_key(&label[..]) {
             cx.span_err(sp, &format!("the missing placeholder '{}' is used in a condition", label));
         }
     }
@@ -226,7 +229,7 @@ fn build_template<'cx>(cx: &'cx mut ExtCtxt, sp: codemap::Span, module_ident: as
     ));
 
     let module = cx.item_mod(sp, sp, module_ident, Vec::new(), items);
-    MacItems::new(vec![module].into_iter())
+    MacEager::items(SmallVector::one(module))
 }
 
 fn parse_tokens<'a>(
@@ -247,7 +250,7 @@ fn parse_tokens<'a>(
             &Token::Placeholder(ref label) => {
                 let get = cx.ident_of(&format!("get_content_{}", label));
 
-                if !expected_placeholders.contains(&label[]) {
+                if !expected_placeholders.contains(&label[..]) {
                     if !utils::is_snake_case(label) {
                         cx.span_err(sp, &format!("non snake case label: '{}'", label));
                     }
@@ -268,7 +271,7 @@ fn parse_tokens<'a>(
             &Token::Conditional(ref label, expected, ref tokens) => {
                 let get = cx.ident_of(&format!("get_condition_{}", label));
 
-                if !conditions.contains_key(&label[]) {
+                if !conditions.contains_key(&label[..]) {
                     if !utils::is_snake_case(label) {
                         cx.span_err(sp, &format!("non snake case label: '{}'", label));
                     }
@@ -290,7 +293,7 @@ fn parse_tokens<'a>(
             &Token::ContentConditional(ref label, expected, ref tokens) => {
                 let get = cx.ident_of(&format!("get_content_{}", label));
 
-                if !expected_placeholders.contains(&label[]) {
+                if !expected_placeholders.contains(&label[..]) {
                     if !utils::is_snake_case(label) {
                         cx.span_err(sp, &format!("non snake case label: '{}'", label));
                     }
@@ -308,7 +311,7 @@ fn parse_tokens<'a>(
                 let get = cx.ident_of(&format!("get_generator_{}", label));
 
 
-                if !generators.contains_key(&label[]) {
+                if !generators.contains_key(&label[..]) {
                     if !utils::is_snake_case(label) {
                         cx.span_err(sp, &format!("non snake case label: '{}'", label));
                     }
