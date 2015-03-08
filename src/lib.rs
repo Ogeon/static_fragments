@@ -1,4 +1,4 @@
-#![feature(plugin_registrar, quote, rustc_private, path, io, fs)]
+#![feature(plugin_registrar, quote, rustc_private, path, io)]
 
 extern crate syntax;
 extern crate rustc;
@@ -39,9 +39,9 @@ struct IdentGroup {
 #[doc(hidden)]
 pub fn macro_registrar(reg: &mut Registry) {
     let from_string_expander = Box::new(from_string) as Box<IdentMacroExpander>;
-    reg.register_syntax_extension(token::intern("template"), IdentTT(from_string_expander, None));
+    reg.register_syntax_extension(token::intern("template"), IdentTT(from_string_expander, None, true));
     let from_file_expander = Box::new(from_file) as Box<IdentMacroExpander>;
-    reg.register_syntax_extension(token::intern("template_file"), IdentTT(from_file_expander, None));
+    reg.register_syntax_extension(token::intern("template_file"), IdentTT(from_file_expander, None, true));
 }
 
 fn from_string<'cx>(cx: &'cx mut ExtCtxt, _sp: codemap::Span, module_ident: ast::Ident, tts: Vec<ast::TokenTree>) -> Box<MacResult + 'cx> {
